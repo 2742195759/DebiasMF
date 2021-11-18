@@ -1,0 +1,1 @@
+cd /home/data/cvpods && python setup.py install && cd - && CUDA_VISIBLE_DEVICES=3 pods_train OUTPUT_DIR /home/data/Output/MF_clean DATASETS.TRAIN '"moivelen_clean_train",' DATASETS.TEST '"moivelen_clean_test",' DATASETS.CLEAN_NUM 80000 TEST.EVAL_PERIOD 10
