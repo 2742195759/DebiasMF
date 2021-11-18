@@ -6,7 +6,7 @@ from cvpods.configs.base_classification_config import BaseClassificationConfig
 _config_dict = dict(
     MODEL=dict(
         WEIGHTS="",
-        SAMPLE_WEIGHTS="/home/data/GAN/MF-GAN/cache/weights.ascii", 
+        SAMPLE_WEIGHTS="/home/data/DebiasMF/MF-GAN/cache/weights.ascii", 
         BPR=dict(
             DIM=60,
             MAX_NUM_USER=3000, 
@@ -31,7 +31,7 @@ _config_dict = dict(
             WARMUP_ITERS=30,
         ),
         OPTIMIZER=dict(
-            BASE_LR=0.05,
+            BASE_LR=0.1,
             MOMENTUM=0.9,
             WEIGHT_DECAY=1e-3,
             WEIGHT_DECAY_NORM=1e-4,

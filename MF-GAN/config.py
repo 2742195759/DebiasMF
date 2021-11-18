@@ -100,7 +100,7 @@ class GANConfig(BaseClassificationConfig):
                 RESUME=False, # load the generator and discriminator
                 HISTOGRAM_INTERVAL=50000, # interval for sending histogram, but will cost a mount of time
                 FAKE_DATA_METHOD='sample',  # 'sample' | 'topk'
-                SAMPLE_WEIGHT_PATH='/home/data/GAN/gan-based/cache/weights.pkl',  
+                SAMPLE_WEIGHT_PATH='/home/data/DebiasMF/MF-GAN/cache/weights.pkl',  
             ),
             OUTPUT_DIR=osp.join(
                 '/home/data/Output',
@@ -109,7 +109,7 @@ class GANConfig(BaseClassificationConfig):
             VISDOM=dict(
                 HOST="192.168.1.1", 
                 PORT="8082", 
-                TURN_ON=True,
+                TURN_ON=False,
                 ENV_PREFIX='mf-gan',
                 KEY_LIST=['KLDIV']
             ), 

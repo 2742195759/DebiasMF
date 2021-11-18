@@ -14,8 +14,8 @@ _config_dict = dict(
     ),
     DATASETS=dict(
         ROOT="/home/data/dataset/rec_debias",
-        TRAIN=("selectionbias_yahoo_train", ),
-        TEST=("selectionbias_yahoo_clean", ),
+        TRAIN=("selectionbias_coat_train", ),
+        TEST=("selectionbias_coat_clean", ),
     ),
     TEST=dict(
         SORT_BY="mse",

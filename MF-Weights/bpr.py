@@ -44,7 +44,7 @@ class MF_Weights(nn.Module):
         users_emb = self.user_embedding(users)
         items_emb = self.item_embedding(items)
         preds = (users_emb * items_emb).sum(dim=-1)
-        loss  = (((preds - scores)**2)).mean()
+        loss  = (((preds - scores)**2) * sample_weight).mean()
         if self.training:
             assert not ((sample_weight == 0).any()), "Dataset is not the same"
             return {

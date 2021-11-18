@@ -25,11 +25,6 @@ def parameter_parser():
     import argparse
     parser = argparse.ArgumentParser(description="Support Args:")
 
-    parser.add_argument("--data_path",                 type=str,   default="./data/Amazon_Instant_Video/",  help="data path")
-    parser.add_argument("--epoch_number",              type=int,   default=40,                              help="number of training epochs")
-    parser.add_argument("--learning_rate",             type=float, default=0.01,                            help="learning rate")
-    parser.add_argument("--intervener_soft",           type=bool,  default=False,                           help="the regular item of the MF model")
-
     return parser.parse_args()
 
 def get_prob_from_dataloader(loader):
@@ -72,7 +67,7 @@ def main(echo=True):
 
     clean_prob = get_prob_from_dataloader(clean_loader)
     noise_prob = get_prob_from_dataloader(noise_loader)
-    gan_correct_prob = correct_prob_from_dataloader(noise_loader, "/home/data/GAN/MF-GAN/cache/weights.ascii")
+    gan_correct_prob = correct_prob_from_dataloader(noise_loader, "/home/data/DebiasMF/MF-GAN/cache/weights.ascii")
     ips_correct_prob = correct_prob_from_dataloader(noise_loader, "/home/data/dataset/rec_debias/coat/propensities.ascii")
     if echo : 
         print ("Gan Correct Noise : ", gan_correct_prob)
