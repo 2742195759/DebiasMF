@@ -26,3 +26,7 @@ This is the implement of MF, MF-IPS and MF-GAN
 除了MF-GAN，每个子文件都是一个cvpods项目，启动方式很简单：安装完毕cvpods之后，执行`pods_train --num-gpus 1` 即可。
 
 对于MF-GAN，启动方式 `python gan_train.py` 每个迭代之后都会更新 MF-GAN/cache/weights.ascii 文件。运行完毕之后进入MF-Weights运行 `pods_train --num-gpus 1` 即可。
+
+# 注意事项
+
+对于一些问题，比如目录找不到可以先看看是不是绝对路径（需要按照自己放置位置进行修正），或者是需要创建目录（自行创建即可，比如Output之类的输出，还有cache之类的输出）
