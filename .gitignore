@@ -1,0 +1,15 @@
+MF/__pycache__/*
+MF/dataset/*
+MF-IPS/__pycache__/
+MF-IPS/log
+MF/log
+MF-GAN/__pycache__/
+MF-GAN/cache/
+MF-Weights/__pycache__/
+MF-Weights/clean_matrix.ascii
+MF-Weights/clean_matrix.npy
+MF-Weights/log
+MF-Weights/matrix_after.ascii
+MF-Weights/matrix_after.npy
+MF-Weights/observe_matrix_0.25.ascii
+MF-Weights/observe_matrix_0.25.npy
