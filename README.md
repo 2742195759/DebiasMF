@@ -14,7 +14,11 @@ This is the implement of MF, MF-IPS and MF-GAN
 
 # 安装数据集
 
-使用docker之后，可以在/home/data/dataset/目录下解压缩下述文件：
+使用docker之后，可以在/home/data/dataset/目录下解压缩下述文件：https://drive.google.com/file/d/1puKeDekgSxJ1Z7puW3dG9_rI2un2DJ9h/view?usp=sharing 
+最后会在 dataset 下生成一个 rec_debias 文件，如此，coat 和 yahoo 数据集将可以使用。
 
-# 
+# 子文件的启动
 
+除了MF-GAN，每个子文件都是一个cvpods项目，启动方式很简单：安装完毕cvpods之后，执行`pods_train --num-gpus 1` 即可。
+
+对于MF-GAN，启动方式 `python gan_train.py` 每个迭代之后都会更新 MF-GAN/cache/weights.ascii 文件。运行完毕之后进入MF-Weights运行 `pods_train --num-gpus 1` 即可。
