@@ -12,6 +12,10 @@ This is the implement of MF, MF-IPS and MF-GAN
 本仓库依赖 修改之后的 cvpods 库：https://github.com/2742195759/cvpods. 可以使用docker进行安装：`docker push 2742195759/xkpods:v1.0` 安装完毕之后记得在/root/cvpods下进行pull并
 重新 python setup.py install 一下。
 
+# docker安装更新依赖库
+
+使用docker安装的话，需要更新cvpods库，进入~/cvpods，git pull 之后运行 python setup.py install。即可
+
 # 安装数据集
 
 使用docker之后，可以在/home/data/dataset/目录下解压缩下述文件：https://drive.google.com/file/d/1puKeDekgSxJ1Z7puW3dG9_rI2un2DJ9h/view?usp=sharing 
