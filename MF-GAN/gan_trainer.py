@@ -36,7 +36,8 @@ from cvpods.engine import DefaultRunner, default_argument_parser, default_setup,
 from cvpods.evaluation import ClassificationEvaluator
 from cvpods.utils import comm
 import cvpods.model_zoo as model_zoo
-from config import clean_cfg, noise_cfg, global_cfg
+import cvpods
+from config import clean_cfg, noise_cfg, global_cfg, args
 from sklearn.metrics import roc_auc_score
 import copy
 import sys
@@ -52,6 +53,7 @@ if True:  # "INIT"/*{{{*/
     dis = common.Discriminator()
     clean_dataloader = build_train_loader(clean_cfg)
     noise_dataloader = build_train_loader(noise_cfg)#/*}}}*/
+
 
 class Cvpack2DataloaderWrapper: #/*{{{*/
     def __init__(self, dataloader):
@@ -154,6 +156,7 @@ class GANTrainer(RunnerBase):  #{{{
     def __init__(self, cfg): #{{{
         super(GANTrainer, self).__init__()
         self.step = 0
+        self.min_kldiv = 1000
         self.setup(cfg)
         self.register_hooks(self.build_hooks(cfg))#}}}
     def build_hooks(self, cfg):#{{{
@@ -176,6 +179,7 @@ class GANTrainer(RunnerBase):  #{{{
             param: logits shape = N, 
         """
         logits = logits.reshape([-1])
+        #length= logits.shape[0] / args.temp
         length= logits.shape[0]
         prob = torch.functional.F.softmax(logits, dim=-1)
         indices = np.random.choice(length, (sample_size, ), replace=True, p=prob.numpy())
@@ -214,9 +218,8 @@ class GANTrainer(RunnerBase):  #{{{
         cfg.link_log()
         self.start_iter = cfg.GAN.START_ITER
         self.max_iter   = cfg.GAN.MAX_ITER
-        self.epoch_dis = cfg.GAN.EPOCH_DIS
-        self.epoch_gen = cfg.GAN.EPOCH_GEN 
-        self.interval = cfg.GAN.HISTOGRAM_INTERVAL 
+        self.epoch_dis = 1
+        self.epoch_gen = 1
         if cfg.GAN.RESUME:
             print ("Resuming")
             self.resume = True
@@ -230,41 +233,6 @@ class GANTrainer(RunnerBase):  #{{{
         self.gen_trainer = GenTrainer(copy.deepcopy(noise_cfg), gen)
         self.dis_trainer.resume_or_load(False)  # just load the weigths from MODEL.WEIGHTS""
         self.gen_trainer.resume_or_load(False)#}}}
-    def eval_dis_model(self, dataloader, prefix='noise', mode='eval'):#{{{
-        if mode == 'eval':
-            dis.eval()
-        else : 
-            dis.train()
-        hit = 0.0
-        tot = 0.0
-        clean_tot = 0
-        losses = 0.0
-        neg_nr = 0.0
-        outputs = []
-        for batch in tqdm.tqdm(dataloader): 
-            output = dis(batch).reshape([-1]).cpu().detach()
-            neg_nr += (output < 0.5).sum()
-            outputs.append(output)
-            label  = torch.as_tensor([ b['is_clean'] for b in batch ]).float()
-            clean_tot += label.sum().cpu()
-            losses += torch.nn.BCELoss(reduction='sum')(output, label)
-            for idx, item in enumerate(output.tolist()): 
-                if item > 0.5 and batch[idx]['is_clean'] == 1: hit += 1
-                if item <=0.5 and batch[idx]['is_clean'] == 0: hit += 1
-            tot += len(batch)
-        outputs = torch.cat(outputs[:5], dim=-1)
-        print ("NegNumber    : ", neg_nr)
-        print ("Discriminator: ", hit / tot)
-        print ("Clean Rate   : ", clean_tot / tot)
-        print ("Losses       : ", losses / tot)
-        if prefix : 
-            self.storage.put_scalar("dis-" + prefix + '-loss', losses / tot)
-            if self.step % self.interval == 0:
-                self.storage.put_tensor(outputs, 'histogram', {
-                        'title': 'dis-'+prefix+'-'+str(self.step), 
-                        'bincount': 200,
-                    })
-#}}}
     def run_step(self):#{{{
         """
         Run just a iteration inside the EventStorage
@@ -288,9 +256,15 @@ class GANTrainer(RunnerBase):  #{{{
             self.gen_trainer.train()
 
         self.cal_reweight()
-        kl = calculate_kldiv.main(False)
-        self.storage.put_scalar("KLDIV", kl)
-        print ("\n\nKLDIV\n\n", kl)
+        #mf_eval()
+        #kl = calculate_kldiv.main(False)
+        #if self.min_kldiv > kl:
+            #self.min_kldiv = kl
+            #import os
+            #print("Save best with kldiv:", self.min_kldiv)
+            #os.system("cp ./cache/weights.ascii ./cache/weights_best.ascii")
+        #self.storage.put_scalar("KLDIV", kl)
+        #print ("\n\nKLDIV\n\n", kl)
 
 #}}}
     def start(self):#{{{
@@ -298,7 +272,39 @@ class GANTrainer(RunnerBase):  #{{{
         #self.baseline_task.train()#}}}
 #}}}
 
+def mf_eval() :  #{{{
+    def runner_decrator(cls): #{{{
+        def custom_build_evaluator(cls, cfg, dataset_name, dataset, output_folder=None):
+            return cvpods.evaluation.build_evaluator(cfg, dataset_name, dataset, output_folder, dump=None)
+        cls.build_evaluator = classmethod(custom_build_evaluator)
+        return cls
+    #}}}
+    custom_config = dict(
+        MODEL=dict(
+            SAMPLE_WEIGHTS=global_cfg.GAN.SAMPLE_WEIGHT_PATH,
+        ),
+        DATASETS=dict(
+            TRAIN=("autodebias_%s_train" % args.dataset, ),
+            TEST=("autodebias_%s_test" % args.dataset, ),
+        ),
+    )
+    weighted_mf_model = model_zoo.get( 
+        config_path="MF-Weights",
+        playground_path="/home/data/DebiasMF",
+        custom_config = custom_config
+    )
+    weighted_mf_config = model_zoo.get_config(
+        config_path="MF-Weights",
+        playground_path="/home/data/DebiasMF",
+        custom_config = custom_config
+    )
+    mf_runner = runner_decrator(DefaultRunner)(weighted_mf_config, lambda x: weighted_mf_model)
+    mf_runner.train() 
+    print ("Best eval result:", mf_runner._max_eval_results['AUC'])
+#}}}
+
 # main function{{{
 gan_trainer = GANTrainer(copy.deepcopy(global_cfg))
 gan_trainer.start()
 #}}}
+mf_eval()

@@ -5,7 +5,6 @@ import os
 import time
 import sys
 
-
 class GpuSchedular:
     def __init__(self, n_gpus=4):
         self.n_gpus = n_gpus 
@@ -77,14 +76,14 @@ class TaskPool:
         """
         return 0, 12
     
-    def _worker(self, param_dict, gpu_id):
-        cmd = "CUDA_VISIBLE_DEVICES={}".format(gpu_id) + " " + self._cmd_body() + " " + self._paramdict2str(param_dict)
+    def _worker(self, param_dict, gpu_id, worker_id, sortby):
+        cmd = "CUDA_VISIBLE_DEVICES={}".format(gpu_id) + " " + self._cmd_body() + " " + self._paramdict2str(param_dict, worker_id)
         print (cmd + "\n")
         r = os.popen(cmd)
         info = r.readlines()
-        return self.collect_results(info)
+        return self.collect_results(info, sortby)
         
-    def start(self, grid_param_dict):
+    def start(self, grid_param_dict, SortBy="AUC"):
         """
         grad_param_dict: 
             'anchor_model: [4]'
@@ -97,7 +96,7 @@ class TaskPool:
                 for idx, val in enumerate(vals):
                     tmp_dict = copy.deepcopy(self.best_param_dict)
                     tmp_dict.update({key:val})
-                    results[idx] = p.apply_async(self._worker, (tmp_dict, self.gpu_schedular.allocate(idx)))
+                    results[idx] = p.apply_async(self._worker, (tmp_dict, self.gpu_schedular.allocate(idx), idx, SortBy))
                 
                 output_keys = [None for _ in range(len(vals))]
                 output_vals = [None for _ in range(len(vals))]
@@ -106,14 +105,16 @@ class TaskPool:
                 self.gpu_schedular.reset()
                 
                 print ("\tTotal Output Key:", output_keys)
-                idx = np.array(output_keys).argmin()
+                if "-" in SortBy : idx = np.array(output_keys).argmin()
+                else:              idx = np.array(output_keys).argmax()
+
                 print ("Find Better {}={}: \n{}\n".format(key, vals[idx], output_vals[idx]))
                 self.best_param_dict[key] = vals[idx]
                 
         print ('Time: \t', (time.time() - s), ' sec')
         print ("Best Parameters: \n{}".format(self.best_param_dict))
 
-    def _paramdict2str(self, dic):
+    def _paramdict2str(self, dic, worker_id):
         params = []
         slash = "--" if self.arg_type == "long" else "-"
         for key, val in dic.items():
@@ -130,9 +131,11 @@ class TaskPool:
         
     
 class Cvpack2TaskPool(TaskPool):
-    def _paramdict2str(self, dic):
+    def _paramdict2str(self, dic, worker_id):
         params = []
-        slash = " "
+        slash = "--" if self.arg_type == "long" else "-"
+        # insert the output file.
+        dic["output_file"] = "/home/data/DebiasMF/MF-GAN/cache/weights_%d.ascii" % worker_id 
         for key, val in dic.items():
             assert (type(key) == str)
             params.append(slash + key)
@@ -145,7 +148,7 @@ class Cvpack2TaskPool(TaskPool):
     def _cmd_body(self):
         #return "python main.py"
         #return "cvpack2_train --eval --resume "
-        return "pods_train "
+        return "python gan_trainer.py "
     
     def _get_name_from_evaluation_table(self, table_lines, search_name):
 #        print (table_lines)
@@ -160,21 +163,28 @@ class Cvpack2TaskPool(TaskPool):
             if name == search_name: return float(val_field[id])
         assert (False)
     
-    def collect_results(self, info):
+    def collect_results(self, info, SortBy="AUC"):
         parameter, result, result_reward, time_cost = '', '', '', ''
         generate_info = ""
         f1_list = []
         table_str_list = []
+        choose_max = True 
+        if "-" in SortBy: 
+            choose_max = False 
+            SortBy = SortBy[1:]
+
         for line_id, line in enumerate(info):
             if 'Evaulation results for mse:' in line:
                 table_str = "".join(info[line_id+1:line_id+4])
-                f1 = self._get_name_from_evaluation_table(info[line_id+1:line_id+4], "MSE")
+                f1 = self._get_name_from_evaluation_table(info[line_id+1:line_id+4], SortBy)
                 table_str_list.append(table_str)
                 f1_list.append(f1)
         if len(f1_list) == 0: 
-            return 100000.0, "wrong happen\n"
+            if choose_max: return "-100000", "wrong happen\n"
+            else : return 100000.0, "wrong happen\n"
         else:
-            best_id = np.array(f1_list).argmin()
+            if choose_max : best_id = np.array(f1_list).argmax()
+            else : best_id = np.array(f1_list).argmin()
             return f1_list[best_id], table_str_list[best_id]
     
     
@@ -190,11 +200,15 @@ assert (gpu_schedular.allocate('task_6') == 1)
 print  (gpu_schedular.gpu2tasks)
 print  (gpu_schedular.task2gpu)
 
-
+# main logic: start tuning
 anchor_grid_param_dict = {
-    'SOLVER.OPTIMIZER.BASE_LR': [0.001, 0.005, 0.01, 0.03, 0.05, 0.1], 
-    'MODEL.BPR.DIM': [10, 20, 30, 40, 50, 60], 
-    'MODEL.BPR.L2_NORM': [0.00001, 0.0001, 0.001, 0.01, 0.03, 0.05], 
+    'gen_lr': [0.001, 0.01, 0.03, 0.05, 0.1, 0.5, 0.8, 1.0], 
+    'dis_lr': [0.001, 0.01, 0.03, 0.05, 0.1, 0.5, 0.8, 1.0], 
+    'dis_epoch': [10, 20, 30, 40, 50, 60], 
+    'gen_epoch': [10, 20, 30, 40, 50, 60], 
+    'dis_l2': [0.00001, 0.0001, 0.001, 0.01, 0.03, 0.05], 
+    'gen_l2': [0.00001, 0.0001, 0.001, 0.01, 0.03, 0.05], 
+    'fake_data_method': ['sample', 'topk'],
 }
 
 # Tuning for anchor model 

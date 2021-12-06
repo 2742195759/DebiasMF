@@ -2,8 +2,50 @@ import os.path as osp
 import torchvision.transforms as transforms
     
 from cvpods.configs.base_classification_config import BaseClassificationConfig
+import numpy as np
+import torch
+import random
 
-""" A Dataset is effected by the following hyperparameters
+
+
+def parameter_parser():
+    import argparse
+    parser = argparse.ArgumentParser(description="Args for MF-GAN:")
+
+    np.random.seed(2021)
+    torch.set_rng_state(torch.manual_seed(2021).get_state())
+    random.seed(2021)
+
+    parser.add_argument("--dataset",                   type=str,   default="coat",                          help="the dataset name")
+    parser.add_argument("--clean_num",                 type=int,   default=350   ,                          help="the dataset name")
+    parser.add_argument("--temp",                      type=float, default=1.0   ,                          help="the dataset name")
+    parser.add_argument("--with_feature",              type=bool,  default=False,                           help="GAN with feature?")
+    parser.add_argument("--dis_epoch",                 type=int,   default=100,                              help="GAN with feature?")
+    parser.add_argument("--dis_lr",                    type=float, default=0.01,                             help="GAN with feature?")
+    parser.add_argument("--dis_l2",                    type=float, default=1e-4,                            help="GAN with feature?")
+    parser.add_argument("--gen_epoch",                 type=int,   default=10,                              help="GAN with feature?")
+    parser.add_argument("--gen_lr",                    type=float, default=0.05,                            help="GAN with feature?")
+    parser.add_argument("--gen_l2",                    type=float, default=1e-4,                            help="GAN with feature?")
+    parser.add_argument("--max_iter",                  type=int,   default=40,                              help="GAN with feature?")
+    parser.add_argument("--fake_data_method",          type=str,   default="sample",                        help="GAN with feature?")
+    parser.add_argument("--output_file",               type=str,   default="/home/data/DebiasMF/MF-GAN/cache/weights.ascii", help="GAN with feature?")
+    parser.add_argument("--trainer",                   type=str,   default="exact",                        help="GAN with feature?")
+
+    parser.add_argument("--weight_method",             type=str,   default="softmax",                       help="GAN with feature?")
+    args = parser.parse_args()
+    assert (args.weight_method in ['sigmoid', 'softmax', 'hard-sigmoid'])
+    print ("The args: ", args)
+    dataset2clean = {
+        "yahoo": 1000,
+        "coat" : 400, 
+    }
+    args.clean_num = dataset2clean[args.dataset]
+    return args
+
+args = parameter_parser() # the args passed by shell
+
+""" 
+    A Dataset is effected by the following hyperparameters
     EPOCH / BATCH_SIZE / DATASETS
 """
 
@@ -13,30 +55,30 @@ _config_dict = dict(
     ),
     DATASETS=dict(
         ROOT="/home/data/dataset/rec_debias",
-        TRAIN=("selectionbias_coat_clean", ),
-        WITH_FEATURE=True,
-        CLEAN_NUM=1000,
+        TRAIN=("autodebias_%s_clean" % args.dataset, ),
+        WITH_FEATURE=args.with_feature,
+        CLEAN_NUM=args.clean_num,
     ),
     DATALOADER=dict(
         NUM_WORKERS=0, 
-        SAMPLER_TRAIN="DistributedGroupSamplerTimeSeed",
+        SAMPLER_TRAIN="DistributedGroupSamplerTimeSeed" if args.trainer == "random" else "DistributedGroupSampler",
     ),
     SOLVER=dict(
         LR_SCHEDULER=dict(
-            MAX_EPOCH=7, 
+            MAX_EPOCH=args.dis_epoch, 
             WARMUP_ITERS=0,
         ),
-        IMS_PER_BATCH=32,
-        IMS_PER_DEVICE=32,
+        IMS_PER_BATCH=64,
+        IMS_PER_DEVICE=64,
         OPTIMIZER=dict(
-            BASE_LR=0.01,
+            BASE_LR=args.dis_lr,
             MOMENTUM=0.90,
-            WEIGHT_DECAY=1e-4,
+            WEIGHT_DECAY=args.dis_l2,
             WEIGHT_DECAY_NORM=1e-4,
             GAMMA=0.3,
         ),
     ),
-    SEED=16925062,
+    SEED=2021,
     INPUT=dict(
         AUG=dict(
             TRAIN_PIPELINES=[
@@ -64,17 +106,17 @@ class NoiseConfig(CleanConfig):
                 WEIGHTS="",
             ),
             DATASETS=dict(
-                TRAIN=("selectionbias_coat_train", ),
-                WITH_FEATURE=True,
+                TRAIN=("autodebias_%s_train" % args.dataset, ),
+                WITH_FEATURE=args.with_feature,
             ), 
             SOLVER=dict(
                 LR_SCHEDULER=dict(
-                    MAX_EPOCH=4,
+                    MAX_EPOCH=args.gen_epoch,
                 ),  
                 OPTIMIZER=dict(
-                    BASE_LR=0.02,
+                    BASE_LR=args.gen_lr,
                     MOMENTUM=0.90,
-                    WEIGHT_DECAY=2e-4,
+                    WEIGHT_DECAY=args.gen_l2,
                     WEIGHT_DECAY_NORM=1e-4,
                     GAMMA=0.3,
                 ),
@@ -83,6 +125,7 @@ class NoiseConfig(CleanConfig):
                 '/home/data/Output',
                 'mf-gan-gen',
             ),
+            SEED=2021,
         ))
 
 
@@ -93,14 +136,11 @@ class GANConfig(BaseClassificationConfig):
         super(GANConfig, self).__init__()
         self._register_configuration(dict(
             GAN=dict(
-                MAX_ITER=5000, # max iteration time
+                MAX_ITER=args.max_iter, # max iteration time
                 START_ITER=0, # set it to zero
-                EPOCH_DIS=1 , # the training epoch of Discriminator during a iteration
-                EPOCH_GEN=1 , # the training epoch of Generator during a iteration
                 RESUME=False, # load the generator and discriminator
-                HISTOGRAM_INTERVAL=50000, # interval for sending histogram, but will cost a mount of time
-                FAKE_DATA_METHOD='sample',  # 'sample' | 'topk'
-                SAMPLE_WEIGHT_PATH='/home/data/DebiasMF/MF-GAN/cache/weights.pkl',  
+                FAKE_DATA_METHOD=args.fake_data_method,  # 'sample' | 'topk'
+                SAMPLE_WEIGHT_PATH=args.output_file,  
             ),
             OUTPUT_DIR=osp.join(
                 '/home/data/Output',
@@ -113,6 +153,7 @@ class GANConfig(BaseClassificationConfig):
                 ENV_PREFIX='mf-gan',
                 KEY_LIST=['KLDIV']
             ), 
+            SEED=2021,
         ))
 
 clean_cfg = CleanConfig()

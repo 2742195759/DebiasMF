@@ -26,7 +26,7 @@ from cvpods.evaluation import ClassificationEvaluator
 from cvpods.utils import comm
 from cvpods.utils import EventStorage
 import cvpods.model_zoo as model_zoo
-from config import clean_cfg, noise_cfg, global_cfg
+from config import clean_cfg, noise_cfg, global_cfg, args
 from sklearn.metrics import roc_auc_score
 import copy
 import sys
@@ -42,11 +42,15 @@ if True:  # "INIT"/*{{{*/
 # main function{{{
 def save_weight_logits(users, items, outputs):
     #user_num, item_num = 943, 1682
-    user_num, item_num = 290, 300
+    dataset2meta = {
+        'yahoo': [15400, 1000], 
+        'coat': [290, 300],
+    }
+    user_num, item_num = dataset2meta[args.dataset]
     mat = np.zeros((user_num, item_num))
     for user, item, output in zip(users, items, outputs):
         mat[user, item] = output
-    np.savetxt("./cache/weights.ascii", mat)
+    np.savetxt(global_cfg.GAN.SAMPLE_WEIGHT_PATH, mat)
 
 from cvpods.utils import PltHistogram
 
@@ -54,7 +58,7 @@ def main(generator):
     with EventStorage() as storage:
         hist = PltHistogram()
         output = []
-        temp = 0.8
+        temp = args.temp
         users = []
         items = []
         clean_size = noise_cfg.DATASETS.CLEAN_NUM
@@ -68,15 +72,44 @@ def main(generator):
         users = torch.as_tensor(users).long()
         items = torch.as_tensor(items).long()
         #method = "hard-sigmoid"
-        method = "sigmoid"
+        method = args.weight_method
         output = output.reshape([-1])
         if method == 'sigmoid':
             output = (output - output.mean()) / output.std()
             output = torch.nn.Sigmoid()(output)
+            #import pdb
+            #pdb.set_trace() 
+            #assert (output > 1e-5).all()
 
-        if method == 'softmax':
+        if method == 'softmax_normal':
             output = torch.nn.Softmax(dim=0)(output / temp)
-            output = (output) / output.mean()
+            minn = output.min()
+            maxx = output.max()
+            print ("Range is : ", maxx - minn)
+            output = (output - minn) / (maxx - minn) * 1
+            assert (output <= 1).all()
+            assert (output >= 0).all()
+            print ("number is : ", (output > 0.6).sum())
+            #output = (output) / output.mean()
+        if method == 'softmax':
+            #import pdb
+            #pdb.set_trace() 
+            output = torch.nn.Softmax(dim=0)(output / temp)
+            mmean = output.mean()
+            mstd = output.std()
+            print ("mean and var is : ", mmean, mstd)
+            output = (output - mmean) / (mstd) * 0.7
+            output = output + 0.5  # make the mean to 0.5
+            output[output>1] = 1
+            output[output<0] = 0
+            assert (output <= 1).all()
+            assert (output >= 0).all()
+            print ("number is : ", (output > 0.5).sum())
+            #output = (output) / output.mean()
+        if method == 'softmax_raw':
+            #import pdb
+            #pdb.set_trace() 
+            output = torch.nn.Softmax(dim=0)(output / temp)
 
         if method == 'upbound':
             """ classify by ratio of 

@@ -7,47 +7,40 @@ _config_dict = dict(
     MODEL=dict(
         WEIGHTS="",
         BPR=dict(
-            DIM=10,
+            DIM=40,
             MAX_NUM_USER=16000, 
             MAX_NUM_ITEM=3000,
+            L2_NORM=0.03,
         ),
     ),
     DATASETS=dict(
         ROOT="/home/data/dataset/rec_debias",
-        TRAIN=("selectionbias_coat_train", ),
-        TEST=("selectionbias_coat_clean", ),
+        TRAIN=("autodebias_coat_test", ),
+        TEST=("autodebias_coat_clean", ),
     ),
     TEST=dict(
-        SORT_BY="mse",
-        EVAL_PERIOD=200,
+        SORT_BY="MSE",
+        EVAL_PERIOD=20,
     ),
     DATALOADER=dict(NUM_WORKERS=0, ),
     SOLVER=dict(
         LR_SCHEDULER=dict(
             STEP=None,
-            MAX_EPOCH=200,
+            MAX_EPOCH=500,
             WARMUP_ITERS=30,
         ),
         OPTIMIZER=dict(
-            BASE_LR=0.1,
+            BASE_LR=0.01,
             MOMENTUM=0.9,
-            WEIGHT_DECAY=1e-3,
-            WEIGHT_DECAY_NORM=1e-4,
+            WEIGHT_DECAY=0.000,
+            WEIGHT_DECAY_NORM=0e-4,
         ),
         CHECKPOINT_PERIOD=30,
-        IMS_PER_BATCH=128,
-        IMS_PER_DEVICE=128,
+        IMS_PER_BATCH=64,
+        IMS_PER_DEVICE=64,
     ),
     INPUT=dict(
         AUG=dict(
-            #TRAIN_PIPELINES=[
-            #    ("RepeatList", dict(transforms=[
-            #        ("Torch_RRC", transforms.RandomResizedCrop(224, scale=(0.2, 1.))),
-            #        ("Torch_RG", transforms.RandomGrayscale(p=0.2)),
-            #        ("Torch_CJ", transforms.ColorJitter(0.4, 0.4, 0.4, 0.4)),
-            #        ("Torch_RHF", transforms.RandomHorizontalFlip()),
-            #    ], repeat_times=2)),
-            #],
         )
     ),
     OUTPUT_DIR=osp.join(

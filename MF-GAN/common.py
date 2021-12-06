@@ -1,15 +1,16 @@
 import logging
 import torch
 import torch.nn as nn
-from cvpods.modeling.xkmodel import MLP, SoftmaxPredictor
+from cvpods.modeling.xkmodel import MLP
 from cvpods.utils.xklib import stack_data_from_batch
 import torchvision.models as models
 from cvpods import model_zoo
 import cvpods
+from config import args
 
-user_num = 2000
-item_num = 3000
-dim = 10
+user_num = 20000
+item_num = 20000
+dim = 20
 
 class ModelBase(nn.Module):
     def __init__(self):
@@ -21,12 +22,12 @@ class ModelBase(nn.Module):
         self.log_sigmoid = nn.LogSigmoid() 
         self.log_softmax = nn.LogSoftmax(dim=-1) 
         self.sigmoid = nn.Sigmoid() 
-        self.with_feature = True
+        self.with_feature = False
         self.softmax = nn.Softmax(dim=-1) 
         if self.with_feature : 
-            self.mlp = cvpods.modeling.xkmodel.MLP([3 * dim + 10 * 2, 3, 1], nn.ReLU, False)
+            self.mlp = cvpods.modeling.xkmodel.MLP([3 * dim + 10 * 2, dim, 1], nn.ReLU, False)
         else :
-            self.mlp = cvpods.modeling.xkmodel.MLP([3 * dim, 3, 1], nn.ReLU, False)
+            self.mlp = cvpods.modeling.xkmodel.MLP([3 * dim, dim, 1], nn.ReLU, False)
         self.loss_name = "ModelBase"
         self.loss_crit = nn.BCELoss()
         self.user_feat_weight = nn.Linear(14, 10)
@@ -45,6 +46,7 @@ class ModelBase(nn.Module):
             output = (B, )
         """
         #__import__('pdb').set_trace()
+        score += 1  # change [-1, 1] -> [0, 2]
         bs = len(batched_inputs)
         x = torch.cat([self.emb_s(score), self.emb_i(item), self.emb_u(user)], dim=-1)
         if self.with_feature: 
@@ -67,6 +69,7 @@ class ModelBase(nn.Module):
         item = stack_data_from_batch(batched_inputs, 'item', torch.long).reshape([-1]) # (N, )
         score = stack_data_from_batch(batched_inputs, 'score', torch.long).reshape([-1]) # (N, )
         logits = self.cal_logits(batched_inputs, user, item, score)
+        self.output['mean-logits'] = logits.mean().detach().cpu()
         if self.training:
             loss = self.loss(logits, batched_inputs)
             return {
@@ -77,8 +80,7 @@ class ModelBase(nn.Module):
             return self.default_eval(logits)
 
     def default_eval(self, logits):
-        scores = self.sigmoid(logits)
-        return scores.detach().cpu().reshape([-1, 1])
+        raise NotImplementedError("NOT IMPLEMENT!") 
 
 class Generator(ModelBase):
     def __init__(self):
@@ -88,19 +90,23 @@ class Generator(ModelBase):
         self.loss_name = "generator loss"
 
     def loss(self, logits, batched_inputs):
-        logits_copy = logits.reshape([-1]) / 0.3
+        logits_copy = logits.reshape([-1]) / args.temp
         assert 'dis_gt' in batched_inputs[0], "Use Discrimination to generate gt for generator"
         dis_gt = stack_data_from_batch(batched_inputs, 'dis_gt', torch.float32).reshape([-1])
         dis_gt = torch.max(torch.as_tensor(0.0).cuda(), dis_gt - 1e-4)
         reward = - torch.log(1 - dis_gt).reshape([-1]) # monotonic increasing
-        prob_x = self.softmax(logits_copy.reshape([-1]))
+        prob_x = self.softmax(logits_copy.reshape([-1])).detach()
+        prob_x.requires_grad = False
         mean_reward = prob_x * reward
         tmp = (logits.reshape([-1]).topk(10)[0].float()).max()
         self.output['logits max'] = tmp.detach().cpu()
         reward = reward - mean_reward
+        #import pdb
+        #pdb.set_trace() 
         loss = - self.log_softmax(logits_copy.reshape([-1]))
         self.output['probs max'] = prob_x.max().detach().cpu()
         self.output['avg reward'] = reward.mean().detach().cpu()
+        #proxy_loss = (reward * loss).mean()
         proxy_loss = (reward * loss).mean()
         return proxy_loss
 
@@ -127,3 +133,7 @@ class Discriminator(ModelBase):
         self.output['accuracy'] = ((probs < 0.5) ^ (is_clean_bool)).float().mean().detach().cpu()
         loss = self.loss_crit(probs, is_clean)
         return loss
+
+    def default_eval(self, logits):
+        scores = self.sigmoid(logits)
+        return scores.detach().cpu().reshape([-1, 1])
