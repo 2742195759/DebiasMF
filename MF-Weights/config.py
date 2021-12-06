@@ -28,7 +28,7 @@ _config_dict = dict(
     SOLVER=dict(
         LR_SCHEDULER=dict(
             STEPS=(70,90),
-            MAX_EPOCH=30,
+            MAX_EPOCH=20,
             WARMUP_ITERS=5,
         ),
         OPTIMIZER=dict(

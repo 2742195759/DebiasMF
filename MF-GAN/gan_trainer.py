@@ -307,4 +307,3 @@ def mf_eval() :  #{{{
 gan_trainer = GANTrainer(copy.deepcopy(global_cfg))
 gan_trainer.start()
 #}}}
-mf_eval()

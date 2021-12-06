@@ -18,7 +18,7 @@ def parameter_parser():
 
     parser.add_argument("--dataset",                   type=str,   default="coat",                          help="the dataset name")
     parser.add_argument("--clean_num",                 type=int,   default=350   ,                          help="the dataset name")
-    parser.add_argument("--temp",                      type=float, default=1.0   ,                          help="the dataset name")
+    parser.add_argument("--temp",                      type=float, default=0.6   ,                          help="the dataset name")
     parser.add_argument("--with_feature",              type=bool,  default=False,                           help="GAN with feature?")
     parser.add_argument("--dis_epoch",                 type=int,   default=100,                              help="GAN with feature?")
     parser.add_argument("--dis_lr",                    type=float, default=0.01,                             help="GAN with feature?")
